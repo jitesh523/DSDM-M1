@@ -1,0 +1,27 @@
+camera:
+  fps: 30
+  resolution: [640, 480]
+
+ear:
+  closed_threshold: 0.20
+  microsleep_duration_s: 1.5
+  sleep_duration_s: 3.0
+  unresponsive_duration_s: 6.0
+
+mar:
+  yawn_threshold: 0.6
+  yawn_min_duration_s: 1.0
+
+perclos:
+  window_s: 60
+  closed_pct: 0.80
+
+gaze:
+  early_warning_s: 2.0
+  long_distraction_s: 3.5
+  vats_cumulative_s: 10.0
+  vats_window_s: 30.0
+
+alert:
+  cooldown_s: 15.0
+  recovery_s: 5.0
