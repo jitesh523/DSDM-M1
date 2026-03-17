@@ -15,6 +15,7 @@ from alert_manager import AlertManager
 from logger import SystemLogger
 from visualizer import Visualizer
 from phase3.onnx_inference import ONNXEyeDetector
+from utils.session_logger import SessionLogger
 import argparse
 
 class DMSPipeline:
@@ -46,6 +47,8 @@ class DMSPipeline:
         self.alert_manager = AlertManager(self.config)
         self.system_logger = SystemLogger()
         self.visualizer = Visualizer(self.config)
+        self.session_logger = SessionLogger() # Phase 4
+        self.start_time = time.time()
 
     def run(self):
         if not self.camera.start():
@@ -118,6 +121,14 @@ class DMSPipeline:
                 alert_state = self.alert_manager.update(events)
                 data["alert_state"] = alert_state
                 
+                # Phase 4: Session Logging
+                self.session_logger.log_event("EAR", value=data.get("ear", 0))
+                self.session_logger.log_event("EYE_STATE", value=data.get("eye_state", "UNKNOWN"))
+                if events.get("drowsy"): self.session_logger.log_event("ALERT", "DROWSY")
+                if events.get("yawn"): self.session_logger.log_event("ALERT", "YAWN")
+                if events.get("phone_use"): self.session_logger.log_event("ALERT", "PHONE")
+                if events.get("early_distraction"): self.session_logger.log_event("ALERT", "DISTRACTED")
+                
                 # 8. Visualization
                 viz_frame = self.visualizer.draw(frame, data)
                 cv2.imshow("DSDM-M1 Pipeline", viz_frame)
@@ -126,6 +137,7 @@ class DMSPipeline:
                     break
                     
         finally:
+            self.session_logger.finalize({"duration": time.time() - self.start_time})
             self.camera.stop()
             cv2.destroyAllWindows()
 
