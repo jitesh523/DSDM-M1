@@ -6,3 +6,6 @@ ultralytics
 torch
 torchvision
 pytest
+onnx
+onnxruntime
+onnxscript

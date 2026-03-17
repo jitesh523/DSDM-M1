@@ -14,9 +14,11 @@ from phone_detector import PhoneDetector
 from alert_manager import AlertManager
 from logger import SystemLogger
 from visualizer import Visualizer
+from phase3.onnx_inference import ONNXEyeDetector
+import argparse
 
 class DMSPipeline:
-    def __init__(self, config_path="config/default.yaml"):
+    def __init__(self, config_path="config/default.yaml", use_onnx=False):
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
             
@@ -27,7 +29,15 @@ class DMSPipeline:
         self.camera = Camera(fps=self.config['camera']['fps'])
         self.face_detector = FaceDetector()
         self.landmark_extractor = LandmarkExtractor()
-        self.eye_detector = EyeDetector(closed_threshold=self.config['ear']['closed_threshold'])
+        
+        self.use_onnx = use_onnx
+        if self.use_onnx:
+            self.eye_detector = ONNXEyeDetector("models/eye_state_best.onnx")
+            self.logger.info("Using Phase 3 ONNX inference for eye state detection.")
+        else:
+            self.eye_detector = EyeDetector(closed_threshold=self.config['ear']['closed_threshold'])
+            self.logger.info("Using baseline EAR logic for eye state detection.")
+            
         self.perclos_manager = PERCLOSManager(window_s=self.config['perclos']['window_s'])
         self.yawn_detector = YawnDetector(yawn_threshold=self.config['mar']['yawn_threshold'])
         self.head_pose = HeadPoseEstimator()
@@ -63,9 +73,15 @@ class DMSPipeline:
                     # For pose: nose, chin, l_eye_corner, r_eye_corner, l_mouth, r_mouth
                     pose_pts = landmarks[[1, 152, 33, 263, 61, 291]].astype("float32")
                     
-                    # 2. Eye State & EAR
-                    avg_ear, state, blink = self.eye_detector.process(l_eye, r_eye)
-                    data["ear"] = avg_ear
+                    # 2. Eye State & EAR (or ONNX probability)
+                    if self.use_onnx:
+                        # ONNX Model requires frame + landmarks
+                        closed_prob, state, blink = self.eye_detector.process(frame, l_eye, r_eye)
+                        data["ear"] = 1.0 - closed_prob # use open prob as proxy for visualization
+                    else:
+                        avg_ear, state, blink = self.eye_detector.process(l_eye, r_eye)
+                        data["ear"] = avg_ear
+                        
                     data["eye_state"] = state
                     if blink:
                         self.system_logger.log_event("BLINK", duration=blink['duration'])
@@ -114,5 +130,9 @@ class DMSPipeline:
             cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    pipeline = DMSPipeline()
+    parser = argparse.ArgumentParser(description="DSDM-M1 Pipeline")
+    parser.add_argument("--onnx", action="store_true", help="Use ONNX model for eye state detection")
+    args = parser.parse_args()
+    
+    pipeline = DMSPipeline(use_onnx=args.onnx)
     pipeline.run()
